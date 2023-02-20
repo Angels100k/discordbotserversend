@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Discord Announcement</title>
+  <script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>
+  <script src="/discord-markdown.js"></script>
+  <script src="https://code.jquery.com/jquery-3.5.0.min.js"></script>
+</head>
+<body>
+  <h1>Discord Announcement</h1>
+
+  <div id="server-list"></div>
+
+  <div id="editor"></div>
+
+  <button id="preview">Preview</button>
+  <button id="send-all">Send to All Servers</button>
+
+  <div id="preview-container"></div>
+  <div id="send-container"></div>
+
+  <script>
+    $(document).ready(() => {
+      // Load the list of servers
+      $.getJSON('http://localhost:3003/servers', data => {
+        const serverList = document.getElementById('server-list');
+        for (const server of data.servers) {
+          const sendButton = document.createElement('button');
+          sendButton.textContent = `Send to ${server.name}`;
+          sendButton.addEventListener('click', () => {
+            sendToServer(server.id);
+          });
+          serverList.appendChild(sendButton);
+        }
+      });
+    });
+
+    // Initialize CKEditor
+    CKEDITOR.replace('editor');
+      
+
+    // Preview the formatted text
+    const previewButton = document.querySelector('#preview');
+    const previewContainer = document.querySelector('#preview-container');
+
+    function convertHtmlToDiscord(html) {
+      // vervang HTML line breaks met Markdown line breaks
+      // const plainText = html.replace(/<br>/gi, '\n');
+
+      // // Gebruik de DOMParser om de HTML tekst te parsen en de inhoud van tekst nodes te krijgen
+      // const domParser = new DOMParser();
+      // const parsedHtml = domParser.parseFromString(plainText, 'text/html');
+      // const textNodes = html; //parsedHtml.body.textContent;
+
+      // Vervang speciale tekens en emoticons met Discord Markdown notatie
+      const convertedText = html.replace(/<br>/gi, '\n')
+                                      .replace(/&nbsp;/gi, ' ')
+                                      .replace(/<b>(.?)<\/b>/gi, '$1*')
+                                      .replace(/<strong>(.?)<\/strong>/gi, '$1*')
+                                      .replace(/<em>(.?)<\/em>/gi, '$1*')
+                                      .replace(/<i>(.?)<\/i>/gi, '$1*')
+                                      .replace(/<u>(.*?)<\/u>/gi, '_$1_')
+                                      .replace(/<strike>(.*?)<\/strike>/gi, '~$1~')
+                                      .replace(/<s>(.*?)<\/s>/gi, '~$1~')
+                                      .replace(/<code>(.*?)<\/code>/gi, '`$1`')
+                                      .replace(/<p>(.*?)<\/p>/gi, '$1')
+                                      .replace(/<img src="(.?)"(.?)>/gi, '')
+                                      .replace(/<pre>(.*?)<\/pre>/gi, '$1');
+                                      // Voeg hier meer opmaakstijlen toe indien gewenst
+
+      return convertedText.trim();
+    }
+
+    
+
+    previewButton.addEventListener('click', () => {
+      const editor = CKEDITOR.instances.editor;
+      const editorData = editor.getData();
+      const html = convertHtmlToDiscord(editorData) ;
+      previewContainer.innerHTML = html;
+    });
+
+    // Send the message to a specific server
+    function sendToServer(serverId) {
+      const editor = CKEDITOR.instances.editor;
+      const editorData = editor.getData();
+      const payload = JSON.stringify({ message: convertHtmlToDiscord(editorData) });
+      $.ajax({
+        url: `http://localhost:3003/send/${serverId}`,
+        method: "POST",
+        data: payload,
+        contentType: "application/json"
+      }).done(function(msg) {
+        console.log(`Message sent to server ${serverId}`);
+      })
+      // $.post(`http://localhost:3003/send/${serverId}`, payload,function(data) {
+      //   console.log(`Message sent to server ${serverId}`);
+      // });
+    }
+
+    // Send the message to all servers
+    const sendAllButton = document.querySelector('#send-all');
+    sendAllButton.addEventListener('click', () => {
+      const editor = CKEDITOR.instances.editor;
+      const editorData = editor.getData();
+      const payload = JSON.stringify({ message: convertHtmlToDiscord(editorData)  }); //{ message: markdown.toHTML(editorData) };
+      $.ajax({
+        url: 'http://localhost:3003/send-all',
+        method: "POST",
+        data: payload,
+        contentType: "application/json"
+      }).done(function(msg) {
+        console.log('Message sent to all servers');
+      })
+
+      // $.post('http://localhost:3003/send-all', payload,function(data) {
+      //   console.log(`Message sent to all servers`);
+      // });
+    });
+  </script>
+</body>
+</html>
